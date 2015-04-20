@@ -27,7 +27,8 @@ public abstract class AbstractHttpProtocol implements Protocol {
         StringBuffer buf = new StringBuffer();
 
         buf.append(agentName);
-        if (agentVersion != null) {
+
+        if (StringUtils.isNotBlank(agentVersion)) {
             buf.append("/");
             buf.append(agentVersion);
         }
