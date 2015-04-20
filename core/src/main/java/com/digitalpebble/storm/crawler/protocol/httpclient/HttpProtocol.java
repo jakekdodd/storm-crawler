@@ -66,8 +66,6 @@ public class HttpProtocol extends AbstractHttpProtocol implements
         CONNECTION_MANAGER.setDefaultMaxPerRoute(20);
     }
 
-    private String userAgent;
-
     private com.digitalpebble.storm.crawler.protocol.HttpRobotRulesParser robots;
 
     /**
@@ -76,30 +74,40 @@ public class HttpProtocol extends AbstractHttpProtocol implements
      */
     private boolean responseTime = true;
 
-    // TODO
+    // TODO find way of limiting the content fetched
     private int maxContent;
-
-    /** The network timeout in millisecond */
-    private int timeout = 30000;
 
     private boolean skipRobots = false;
 
-    /** The proxy hostname. */
-    private String proxyHost = null;
+    private HttpClientBuilder builder;
 
-    /** The proxy port. */
-    private int proxyPort = 8080;
-
-    /** Indicates if a proxy is used */
-    private boolean useProxy = false;
+    private RequestConfig requestConfig;
 
     @Override
-    public ProtocolResponse getProtocolOutput(String url, Metadata md)
-            throws Exception {
+    public void configure(final Config conf) {
+        this.maxContent = ConfUtils.getInt(conf, "http.content.limit",
+                64 * 1024);
+        String userAgent = getAgentString(
+                ConfUtils.getString(conf, "http.agent.name"),
+                ConfUtils.getString(conf, "http.agent.version"),
+                ConfUtils.getString(conf, "http.agent.description"),
+                ConfUtils.getString(conf, "http.agent.url"),
+                ConfUtils.getString(conf, "http.agent.email"));
 
-        HttpClientBuilder builder = HttpClients.custom()
-                .setUserAgent(userAgent)
+        this.responseTime = ConfUtils.getBoolean(conf,
+                "http.store.responsetime", true);
+
+        this.skipRobots = ConfUtils.getBoolean(conf, "http.skip.robots", false);
+
+        robots = new HttpRobotRulesParser(conf);
+
+        builder = HttpClients.custom().setUserAgent(userAgent)
                 .setConnectionManager(CONNECTION_MANAGER);
+
+        String proxyHost = ConfUtils.getString(conf, "http.proxy.host", null);
+        int proxyPort = ConfUtils.getInt(conf, "http.proxy.port", 8080);
+
+        boolean useProxy = (proxyHost != null && proxyHost.length() > 0);
 
         // use a proxy?
         if (useProxy) {
@@ -109,15 +117,24 @@ public class HttpProtocol extends AbstractHttpProtocol implements
             builder.setRoutePlanner(routePlanner);
         }
 
-        LOG.debug("HTTP connection manager stats "
-                + CONNECTION_MANAGER.getTotalStats().toString());
+        int timeout = ConfUtils.getInt(conf, "http.timeout", 10000);
+        requestConfig = RequestConfig.custom().setSocketTimeout(timeout)
+                .setConnectTimeout(timeout).build();
+    }
 
+    @Override
+    public ProtocolResponse getProtocolOutput(String url, Metadata md)
+            throws Exception {
+
+        LOG.debug("HTTP connection manager stats {}",
+                CONNECTION_MANAGER.getTotalStats());
+
+        // no need to release the connection explicitly as this is handled
+        // automatically
         CloseableHttpClient httpclient = builder.build();
 
-        RequestConfig requestConfig = RequestConfig.custom()
-                .setSocketTimeout(timeout).setConnectTimeout(timeout).build();
-
         HttpGet httpget = new HttpGet(url);
+        httpget.setConfig(requestConfig);
 
         if (md != null) {
             String ifModifiedSince = md.getFirstValue("cachedLastModified");
@@ -131,10 +148,6 @@ public class HttpProtocol extends AbstractHttpProtocol implements
             }
         }
 
-        httpget.setConfig(requestConfig);
-
-        // no need to release the connection explicitly as this is handled
-        // automatically
         return httpclient.execute(httpget, this);
     }
 
@@ -159,31 +172,6 @@ public class HttpProtocol extends AbstractHttpProtocol implements
         if (this.skipRobots)
             return RobotRulesParser.EMPTY_RULES;
         return robots.getRobotRulesSet(this, url);
-    }
-
-    @Override
-    public void configure(final Config conf) {
-        this.timeout = ConfUtils.getInt(conf, "http.timeout", 10000);
-
-        this.proxyHost = ConfUtils.getString(conf, "http.proxy.host", null);
-        this.proxyPort = ConfUtils.getInt(conf, "http.proxy.port", 8080);
-        this.useProxy = (proxyHost != null && proxyHost.length() > 0);
-
-        this.maxContent = ConfUtils.getInt(conf, "http.content.limit",
-                64 * 1024);
-        this.userAgent = getAgentString(
-                ConfUtils.getString(conf, "http.agent.name"),
-                ConfUtils.getString(conf, "http.agent.version"),
-                ConfUtils.getString(conf, "http.agent.description"),
-                ConfUtils.getString(conf, "http.agent.url"),
-                ConfUtils.getString(conf, "http.agent.email"));
-
-        this.responseTime = ConfUtils.getBoolean(conf,
-                "http.store.responsetime", true);
-
-        this.skipRobots = ConfUtils.getBoolean(conf, "http.skip.robots", false);
-
-        robots = new HttpRobotRulesParser(conf);
     }
 
     public static void main(String args[]) throws Exception {
