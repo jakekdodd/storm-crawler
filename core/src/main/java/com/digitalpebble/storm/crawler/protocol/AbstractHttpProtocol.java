@@ -16,6 +16,8 @@
  */
 package com.digitalpebble.storm.crawler.protocol;
 
+import org.apache.commons.lang.StringUtils;
+
 public abstract class AbstractHttpProtocol implements Protocol {
 
     protected static String getAgentString(String agentName,
@@ -29,28 +31,33 @@ public abstract class AbstractHttpProtocol implements Protocol {
             buf.append("/");
             buf.append(agentVersion);
         }
-        if (((agentDesc != null) && (agentDesc.length() != 0))
-                || ((agentEmail != null) && (agentEmail.length() != 0))
-                || ((agentURL != null) && (agentURL.length() != 0))) {
+
+        boolean hasAgentDesc = StringUtils.isNotBlank(agentDesc);
+        boolean hasAgentURL = StringUtils.isNotBlank(agentURL);
+        boolean hasAgentEmail = StringUtils.isNotBlank(agentEmail);
+
+        if (hasAgentDesc || hasAgentEmail || hasAgentURL) {
             buf.append(" (");
 
-            if ((agentDesc != null) && (agentDesc.length() != 0)) {
+            if (hasAgentDesc) {
                 buf.append(agentDesc);
-                if ((agentURL != null) || (agentEmail != null))
+                if (hasAgentURL || hasAgentEmail)
                     buf.append("; ");
             }
 
-            if ((agentURL != null) && (agentURL.length() != 0)) {
+            if (hasAgentURL) {
                 buf.append(agentURL);
-                if (agentEmail != null)
+                if (hasAgentEmail)
                     buf.append("; ");
             }
 
-            if ((agentEmail != null) && (agentEmail.length() != 0))
+            if (hasAgentEmail) {
                 buf.append(agentEmail);
+            }
 
             buf.append(")");
         }
+
         return buf.toString();
     }
 
