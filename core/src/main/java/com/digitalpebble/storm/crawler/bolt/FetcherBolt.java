@@ -36,6 +36,8 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import backtype.storm.metric.api.MeanReducer;
+import backtype.storm.metric.api.ReducedMetric;
 import org.apache.commons.lang.StringUtils;
 import org.apache.storm.guava.collect.Iterables;
 import org.slf4j.Logger;
@@ -484,8 +486,13 @@ public class FetcherBolt extends BaseRichBolt {
                     // will enforce the delay on next fetch
                     asap = false;
 
+                    long start = System.currentTimeMillis();
                     ProtocolResponse response = protocol.getProtocolOutput(
                             fit.url, metadata);
+                    long end = System.currentTimeMillis();
+
+                    metricGauge.scope("fetch_time").incrBy(end - start);
+                    metricGauge.scope("bytes_fetched").incrBy(response.getContent().length);
 
                     LOG.info("[Fetcher #{}] Fetched {} with status {}",
                             taskIndex, fit.url, response.getStatusCode());
